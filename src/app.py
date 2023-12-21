@@ -1,47 +1,49 @@
+# Importing necessary modules
 import os
 import json
-from flask import Flask, request
-from flask_pymongo import flask_PyMongo
+from flask import Flask, request, abort
+from flask_pymongo import PyMongo
 from bson import json_util, ObjectId
 
-#using os module to set environment variable for MONGODB_URI
-MONGO_URI = os.environ.get("MONGODB_ENDPOINT")
-#set environment variable - export MONGODB_ENDPOINT="mongodb://db:27017/example"
+# Getting MongoDB URI from environment variable
+MONGODB_URI = os.environ.get("MONGODB_ENDPOINT")
 
-
-#create an object for flask
+# Creating a Flask app
 app = Flask(__name__)
+app.config["MONGO_URI"] = MONGODB_URI
+mongo = PyMongo(app)
 
-#configuring mogodb uri
-app.config["MONGO_URI"]=MONGODB_URI
+# Function to parse MongoDB BSON objects to JSON
+def parse_json(data):
+    return json.loads(json_util.dumps(data))
 
-#to make connection with mongodb we use mongodb object
-mongo =PyMongo(app)
-
+# Basic route to test the Flask app
 @app.route('/')
 def hello_world():
-    return 'Hello World, from Subash!'
+    return 'Hello, World!'
 
-#creating a route to list the items
+# Route to get all items
 @app.route('/items', methods=['GET'])
 def get_all_items():
     items = list(mongo.db.items.find())
     return parse_json(items), 200
 
-#
+# Route to create a new item
 @app.route('/items', methods=['POST'])
-def create_items():
+def create_item():
     item = request.get_json()
-    inserted_item =mongo.db.items.insert_one(item)
+    inserted_item = mongo.db.items.insert_one(item)
     return parse_json(inserted_item.inserted_id), 201
 
-#
+# Route to get a specific item by ID
 @app.route('/items/<item_id>', methods=['GET'])
 def get_item(item_id):
-    items = mongo.db.items.find_one_or_404({ '_id': ObjectId(item_id)})
+    item = mongo.db.items.find_one({'_id': ObjectId(item_id)})
+    if item is None:
+        abort(404)  # Return 404 if item not found
     return parse_json(item), 200
 
-#
+# Route to update a specific item by ID
 @app.route('/items/<item_id>', methods=['PUT'])
 def update_item(item_id):
     item = request.get_json()
@@ -52,8 +54,7 @@ def update_item(item_id):
     updated_item = mongo.db.items.find_one({'_id': item_id_obj})
     return parse_json({'message': 'Item updated successfully', 'item': updated_item}), 200
 
-
-#
+# Route to delete a specific item by ID
 @app.route('/items/<item_id>', methods=['DELETE'])
 def delete_item(item_id):
     item_id_obj = ObjectId(item_id)
@@ -62,8 +63,6 @@ def delete_item(item_id):
         return parse_json({'error': 'Item not found'}), 404
     return parse_json({'message': 'Item deleted successfully'}), 200
 
-
+# Run the app if the script is executed
 if __name__ == "__main__":
-    app.run(debug=True, port=6060)
-
-
+    app.run(debug=True)
